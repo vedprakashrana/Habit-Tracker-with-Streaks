@@ -1,6 +1,11 @@
 # HabitFlow — Habit Tracker with Streaks
 > **Production-Quality Full-Stack Web Application for Habit Tracking, Flexible Schedules, Streak Calculation, and Consistency Analytics.**
 
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-GitHub%20Pages-4f46e5?style=for-the-badge&logo=github)](https://vedprakashrana.github.io/Habit-Tracker-with-Streaks/)
+[![CI / CD](https://img.shields.io/badge/Deployment-GitHub%20Actions-22c55e?style=for-the-badge&logo=githubactions)](https://github.com/vedprakashrana/Habit-Tracker-with-Streaks/actions)
+
+🔗 **Live Application URL**: [https://vedprakashrana.github.io/Habit-Tracker-with-Streaks/](https://vedprakashrana.github.io/Habit-Tracker-with-Streaks/)
+
 ---
 
 ## 1. Project Name & Description

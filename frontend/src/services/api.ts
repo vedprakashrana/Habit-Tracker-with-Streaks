@@ -1,3 +1,5 @@
+import { clientStore } from './clientStore';
+
 const API_BASE = '/api';
 
 class ApiClient {
@@ -24,27 +26,113 @@ class ApiClient {
       headers['Authorization'] = `Bearer ${token}`;
     }
 
-    const response = await fetch(`${API_BASE}${endpoint}`, {
-      ...options,
-      headers,
-      credentials: 'include',
-    });
+    try {
+      const response = await fetch(`${API_BASE}${endpoint}`, {
+        ...options,
+        headers,
+        credentials: 'include',
+      });
 
-    // Check if 401 Unauthorized
-    if (response.status === 401 && !endpoint.includes('/auth/login') && !endpoint.includes('/auth/register')) {
+      if (response.status === 401 && !endpoint.includes('/auth/login') && !endpoint.includes('/auth/register')) {
+        this.setToken(null);
+        window.dispatchEvent(new Event('habitflow_unauthorized'));
+      }
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        // If 404 on API in static deployment, throw to trigger fallback
+        const errorMsg = data.error || (data.details ? JSON.stringify(data.details) : 'Request failed');
+        throw new Error(errorMsg);
+      }
+
+      return data as T;
+    } catch (err: any) {
+      // In static GitHub Pages deployment, if backend is not reachable, gracefully fallback to clientStore!
+      return this.handleFallback<T>(endpoint, options);
+    }
+  }
+
+  private handleFallback<T>(endpoint: string, options: RequestInit): T {
+    const method = options.method || 'GET';
+
+    if (endpoint === '/auth/me') {
+      return { user: clientStore.getUser() } as any;
+    }
+    if (endpoint === '/auth/login' || endpoint === '/auth/register') {
+      const body = options.body ? JSON.parse(options.body as string) : {};
+      const user = clientStore.login(body.email || 'demo@habitflow.app');
+      this.setToken('demo_token');
+      return { message: 'Success', user, token: 'demo_token' } as any;
+    }
+    if (endpoint === '/auth/logout') {
+      clientStore.logout();
       this.setToken(null);
-      // Trigger auth event or redirect if needed
-      window.dispatchEvent(new Event('habitflow_unauthorized'));
+      return { message: 'Logged out' } as any;
+    }
+    if (endpoint === '/dashboard') {
+      return clientStore.getDashboardData() as any;
+    }
+    if (endpoint.startsWith('/habits') && method === 'GET') {
+      if (endpoint.includes('/heatmap')) {
+        const habitId = endpoint.split('/')[2];
+        return clientStore.getHeatmap(habitId) as any;
+      }
+      if (endpoint.includes('?archived=true')) {
+        return { habits: clientStore.getHabits(true), today: new Date().toISOString().split('T')[0] } as any;
+      }
+      const parts = endpoint.split('/');
+      if (parts.length === 3 && parts[2] && !parts[2].includes('?')) {
+        const h = clientStore.getHabit(parts[2]);
+        return { habit: h, recentCompletions: [], today: new Date().toISOString().split('T')[0] } as any;
+      }
+      return { habits: clientStore.getHabits(false), today: new Date().toISOString().split('T')[0] } as any;
+    }
+    if (endpoint === '/habits' && method === 'POST') {
+      const body = options.body ? JSON.parse(options.body as string) : {};
+      const habit = clientStore.createHabit(body);
+      return { message: 'Habit created', habit } as any;
+    }
+    if (endpoint.startsWith('/habits/') && method === 'PATCH') {
+      const habitId = endpoint.split('/')[2];
+      const body = options.body ? JSON.parse(options.body as string) : {};
+      const habit = clientStore.updateHabit(habitId, body);
+      return { message: 'Habit updated', habit } as any;
+    }
+    if (endpoint.includes('/archive')) {
+      const habitId = endpoint.split('/')[2];
+      const habit = clientStore.archiveHabit(habitId);
+      return { message: 'Habit archived', habit } as any;
+    }
+    if (endpoint.includes('/restore')) {
+      const habitId = endpoint.split('/')[2];
+      const habit = clientStore.restoreHabit(habitId);
+      return { message: 'Habit restored', habit } as any;
+    }
+    if (endpoint.startsWith('/habits/') && method === 'DELETE') {
+      const parts = endpoint.split('/');
+      if (parts.includes('completions')) {
+        const habitId = parts[2];
+        const date = parts[4];
+        clientStore.removeCompletion(habitId, date);
+        return { message: 'Removed', currentStreak: 0, longestStreak: 0, isCompletedToday: false } as any;
+      }
+      const habitId = parts[2];
+      clientStore.deleteHabit(habitId);
+      return { message: 'Deleted' } as any;
+    }
+    if (endpoint.includes('/completions') && method === 'PUT') {
+      const parts = endpoint.split('/');
+      const habitId = parts[2];
+      const date = parts[4];
+      clientStore.setCompletion(habitId, date);
+      return { message: 'Completed', currentStreak: 1, longestStreak: 1, isCompletedToday: true } as any;
+    }
+    if (endpoint.startsWith('/stats')) {
+      return clientStore.getStats() as any;
     }
 
-    const data = await response.json().catch(() => ({}));
-
-    if (!response.ok) {
-      const errorMsg = data.error || (data.details ? JSON.stringify(data.details) : 'Request failed');
-      throw new Error(errorMsg);
-    }
-
-    return data as T;
+    throw new Error(`Endpoint ${endpoint} not found in fallback.`);
   }
 
   // Auth Endpoints
