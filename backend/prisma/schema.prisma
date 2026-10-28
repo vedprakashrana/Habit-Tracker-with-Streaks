@@ -1,0 +1,69 @@
+// Prisma Schema for HabitFlow
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum ScheduleType {
+  DAILY
+  WEEKDAYS
+  TIMES_PER_WEEK
+}
+
+model User {
+  id           String    @id @default(uuid())
+  name         String
+  email        String    @unique
+  passwordHash String
+  timezone     String    @default("UTC")
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  habits       Habit[]
+
+  @@index([email])
+}
+
+model Habit {
+  id                    String            @id @default(uuid())
+  userId                String
+  user                  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name                  String
+  description           String?
+  icon                  String            @default("Target")
+  color                 String            @default("#6366F1")
+  scheduleType          ScheduleType      @default(DAILY)
+  // Structured schedule configuration stored as JSON string or JSON
+  // For WEEKDAYS: {"weekdays": [1, 3, 5]} (1 = Monday, ..., 7 = Sunday)
+  // For TIMES_PER_WEEK: {"targetPerWeek": 3}
+  scheduleConfiguration String            @default("{}")
+  reminderTime          String?
+  archivedAt            DateTime?
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  completions           HabitCompletion[]
+
+  @@index([userId])
+  @@index([userId, archivedAt])
+}
+
+model HabitCompletion {
+  id          String   @id @default(uuid())
+  habitId     String
+  habit       Habit    @relation(fields: [habitId], references: [id], onDelete: Cascade)
+  // Local calendar date formatted as YYYY-MM-DD
+  localDate   String
+  completedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([habitId, localDate], name: "habitId_localDate")
+  @@index([habitId])
+  @@index([localDate])
+  @@index([habitId, localDate])
+}
